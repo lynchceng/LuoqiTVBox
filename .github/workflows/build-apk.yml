@@ -64,6 +64,10 @@ jobs:
           ls "$ANDROID_HOME/platforms" 2>/dev/null || true
           echo "--- 已安装 build-tools ---"
           ls "$ANDROID_HOME/build-tools" 2>/dev/null || true
+          # Chaquopy(pyramid) 配置阶段会强制读取 local.properties，本地被 gitignore 忽略，这里自动生成
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          echo "已生成 local.properties:"
+          cat local.properties
 
       - name: 4. 检查并按需安装缺失的 SDK 组件
         run: |
