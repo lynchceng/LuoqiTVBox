@@ -43,13 +43,40 @@ jobs:
           distribution: temurin
           java-version: '11'
 
-      - name: 3. 准备 Android SDK 环境
-        uses: android-actions/setup-android@v3
-
-      - name: 4. 安装 compileSdk 与 build-tools
+      - name: 3. 定位 GitHub 服务器预装的 Android SDK
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "build-tools;30.0.3"
+          # GitHub 官方 ubuntu 镜像已预装 Android SDK，无需第三方 action
+          if [ -z "$ANDROID_HOME" ]; then
+            echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+            export ANDROID_HOME="/usr/local/lib/android/sdk"
+          fi
+          echo "SDK 路径: $ANDROID_HOME"
+          SDKMGR=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -1)
+          if [ -n "$SDKMGR" ]; then
+            echo "SDKMGR=$SDKMGR" >> "$GITHUB_ENV"
+            echo "$(dirname "$SDKMGR")" >> "$GITHUB_PATH"
+          fi
+          echo "--- 已安装 platform ---"
+          ls "$ANDROID_HOME/platforms" 2>/dev/null || true
+          echo "--- 已安装 build-tools ---"
+          ls "$ANDROID_HOME/build-tools" 2>/dev/null || true
+
+      - name: 4. 检查并按需安装缺失的 SDK 组件
+        run: |
+          NEED=0
+          [ -d "$ANDROID_HOME/platforms/android-33" ] || NEED=1
+          [ -d "$ANDROID_HOME/build-tools/33.0.2" ] || NEED=1
+          [ -d "$ANDROID_HOME/build-tools/30.0.3" ] || NEED=1
+          if [ "$NEED" -eq 0 ]; then
+            echo "所需 SDK 组件齐全，跳过安装"
+            exit 0
+          fi
+          if [ -z "$SDKMGR" ] || [ ! -x "$SDKMGR" ]; then
+            echo "::error::缺少 SDK 组件且找不到 sdkmanager，请检查 runner 镜像"
+            exit 1
+          fi
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" --install "platforms;android-33" "build-tools;33.0.2" "build-tools;30.0.3"
 
       - name: 5. 修正 pyramid 模块里写死的 Windows Python 路径
         run: |
@@ -115,10 +142,14 @@ jobs:
         run: |
           echo "## TVBox 构建结果" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          find app/build/outputs/apk -name "*.apk" -print 2>/dev/null | while read -r f; do
-            echo "- \`$f\` ($(du -h "$f" | cut -f1))" >> "$GITHUB_STEP_SUMMARY"
-          done
-          find app/build/outputs/apk -name "*.apk" -print 2>/dev/null
+          if [ -d app/build/outputs/apk ]; then
+            find app/build/outputs/apk -name "*.apk" -print | while read -r f; do
+              echo "- \`$f\` ($(du -h "$f" | cut -f1))" >> "$GITHUB_STEP_SUMMARY"
+            done
+            find app/build/outputs/apk -name "*.apk" -print
+          else
+            echo "未找到 APK 输出目录（说明前面的构建步骤未成功）。" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: 10. 上传 APK 到 Artifacts
         uses: actions/upload-artifact@v4
