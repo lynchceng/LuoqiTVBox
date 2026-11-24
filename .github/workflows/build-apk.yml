@@ -1,0 +1,128 @@
+name: Build TVBox APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: '选择要构建的 flavor'
+        required: false
+        default: Java
+        type: choice
+        options:
+          - Java
+          - Java32
+          - Java64
+      build_type:
+        description: 'Debug = 测试包；Release = 混淆包（云端自动签名，可直接安装）'
+        required: false
+        default: Debug
+        type: choice
+        options:
+          - Debug
+          - Release
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: 1. 检出代码
+        uses: actions/checkout@v4
+
+      - name: 2. 安装 JDK 11（AGP 7.2.2 + Gradle 7.5 的匹配版本）
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: 3. 准备 Android SDK 环境
+        uses: android-actions/setup-android@v3
+
+      - name: 4. 安装 compileSdk 与 build-tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "build-tools;30.0.3"
+
+      - name: 5. 修正 pyramid 模块里写死的 Windows Python 路径
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("pyramid/build.gradle")
+          s = p.read_text()
+          s2 = s.replace(
+              'buildPython("D:/Programs/Python/Python38/python.exe")',
+              'buildPython("/usr/bin/python3")',
+          )
+          p.write_text(s2)
+          print("已替换为 Linux Python 路径" if s2 != s else "未找到原路径，可能已经改过")
+          PY
+
+      - name: 6. 在云端为 Release 自动配置签名（使用你自己的 jks）
+        if: inputs.build_type == 'Release'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/build.gradle")
+          s = p.read_text()
+          if "signingConfigs {" not in s:
+              lines = [
+                  "    signingConfigs {",
+                  "        release {",
+                  '            storeFile file("../.github/workflows/my-release.jks")',
+                  '            storePassword "tvbox2026release"',
+                  '            keyAlias "tvboxkey"',
+                  '            keyPassword "tvbox2026release"',
+                  "            v1SigningEnabled true",
+                  "            v2SigningEnabled true",
+                  "        }",
+                  "    }",
+                  "",
+              ]
+              signing = "\n".join(lines) + "\n"
+              s = s.replace("android {\n", "android {\n" + signing, 1)
+          s = s.replace(
+              "        release {\n            minifyEnabled true",
+              "        release {\n            signingConfig signingConfigs.release\n            minifyEnabled true",
+              1,
+          )
+          p.write_text(s)
+          print("已在云端注入 Release 签名配置")
+          PY
+
+      - name: 7. 配置 Gradle 缓存
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 8. 执行 Gradle 打包
+        run: |
+          chmod +x gradlew
+          FLAVOR="${{ inputs.flavor }}"
+          BUILD_TYPE="${{ inputs.build_type }}"
+          [ -z "$FLAVOR" ] && FLAVOR="Java"
+          [ -z "$BUILD_TYPE" ] && BUILD_TYPE="Debug"
+          echo "本次执行任务: assemble${FLAVOR}${BUILD_TYPE}"
+          ./gradlew "assemble${FLAVOR}${BUILD_TYPE}" --stacktrace --no-daemon
+
+      - name: 9. 输出构建摘要
+        if: always()
+        run: |
+          echo "## TVBox 构建结果" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          find app/build/outputs/apk -name "*.apk" -print 2>/dev/null | while read -r f; do
+            echo "- \`$f\` ($(du -h "$f" | cut -f1))" >> "$GITHUB_STEP_SUMMARY"
+          done
+          find app/build/outputs/apk -name "*.apk" -print 2>/dev/null
+
+      - name: 10. 上传 APK 到 Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TVBox-APK
+          path: app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
