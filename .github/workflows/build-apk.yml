@@ -37,11 +37,15 @@ jobs:
       - name: 1. 检出代码
         uses: actions/checkout@v4
 
-      - name: 2. 安装 JDK 11（AGP 7.2.2 + Gradle 7.5 的匹配版本）
+      - name: 2. 安装 JDK 11 与 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '11'
+          # 两个版本：17 供 sdkmanager 使用，11 供 Gradle 编译使用
+          # 最后一个（11）会作为默认 JAVA_HOME，17 另存为 JAVA_HOME_17_X64
+          java-version: |
+            17
+            11
 
       - name: 3. 定位 GitHub 服务器预装的 Android SDK
         run: |
@@ -74,6 +78,11 @@ jobs:
           if [ -z "$SDKMGR" ] || [ ! -x "$SDKMGR" ]; then
             echo "::error::缺少 SDK 组件且找不到 sdkmanager，请检查 runner 镜像"
             exit 1
+          fi
+          # sdkmanager 要求 JDK 17+，临时切换到 17（仅本步骤生效）
+          if [ -n "$JAVA_HOME_17_X64" ]; then
+            export JAVA_HOME="$JAVA_HOME_17_X64"
+            export PATH="$JAVA_HOME/bin:$PATH"
           fi
           yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
           "$SDKMGR" --install "platforms;android-33" "build-tools;33.0.2" "build-tools;30.0.3"
