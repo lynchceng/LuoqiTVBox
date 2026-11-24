@@ -1,29 +1,8 @@
 name: Build TVBox APK
 
 on:
+  # 仅手动触发：进入 Actions 页面点击 Run workflow 即可
   workflow_dispatch:
-    inputs:
-      flavor:
-        description: '选择要构建的 flavor'
-        required: false
-        default: Java
-        type: choice
-        options:
-          - Java
-          - Java32
-          - Java64
-      build_type:
-        description: 'Debug = 测试包；Release = 混淆包（云端自动签名，可直接安装）'
-        required: false
-        default: Debug
-        type: choice
-        options:
-          - Debug
-          - Release
-  push:
-    branches:
-      - main
-      - master
 
 permissions:
   contents: read
@@ -106,7 +85,6 @@ jobs:
           PY
 
       - name: 6. 在云端为 Release 自动配置签名（使用你自己的 jks）
-        if: inputs.build_type == 'Release'
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -140,15 +118,11 @@ jobs:
       - name: 7. 配置 Gradle 缓存
         uses: gradle/actions/setup-gradle@v4
 
-      - name: 8. 执行 Gradle 打包
+      - name: 8. 执行 Gradle 打包（Release：java32 + java64 两个包）
         run: |
           chmod +x gradlew
-          FLAVOR="${{ inputs.flavor }}"
-          BUILD_TYPE="${{ inputs.build_type }}"
-          [ -z "$FLAVOR" ] && FLAVOR="Java"
-          [ -z "$BUILD_TYPE" ] && BUILD_TYPE="Debug"
-          echo "本次执行任务: assemble${FLAVOR}${BUILD_TYPE}"
-          ./gradlew "assemble${FLAVOR}${BUILD_TYPE}" --stacktrace --no-daemon
+          # 一次构建 32 位和 64 位两个 Release 包，均使用你的 jks 签名
+          ./gradlew assembleJava32Release assembleJava64Release --stacktrace --no-daemon
 
       - name: 9. 输出构建摘要
         if: always()
