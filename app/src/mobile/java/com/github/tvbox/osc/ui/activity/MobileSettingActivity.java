@@ -371,9 +371,10 @@ public class MobileSettingActivity extends MobileBaseActivity {
 
     /** IJK解码方式：与 TV llMediaCodec 一致，来源 ApiConfig.getIjkCodes()。 */
     private void addIjkCodec() {
-        final List<IJKCode> codes;
-        try { codes = ApiConfig.get().getIjkCodes(); }
-        catch (Throwable t) { codes = null; }
+        List<IJKCode> codesTmp;
+        try { codesTmp = ApiConfig.get().getIjkCodes(); }
+        catch (Throwable t) { codesTmp = null; }
+        final List<IJKCode> codes = codesTmp;
         String cur = str(HawkConfig.IJK_CODEC);
         if (TextUtils.isEmpty(cur)) cur = "硬解码";
         addRow("IJK解码方式", cur + " ›", new View.OnClickListener() {
