@@ -389,7 +389,7 @@ public class MobileSettingActivity extends MobileBaseActivity {
                             if (wp.exists()) wp.delete();
                             RoomDataManger.deleteVodRecordAll();
                             RoomDataManger.deleteVodCollectAll();
-                            Hawk.clear();
+                            Hawk.deleteAll();
                         } catch (Throwable ignored) {}
                         toast("已重置，正在重启");
                         android.os.Process.killProcess(android.os.Process.myPid());
