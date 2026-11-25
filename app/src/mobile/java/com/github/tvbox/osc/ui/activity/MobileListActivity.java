@@ -123,7 +123,7 @@ public class MobileListActivity extends MobileBaseActivity {
         root.addView(recyclerView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        root.addView(bottomNav(mode.equals(MODE_HISTORY) || mode.equals(MODE_COLLECT) ? 3 : -1));
+        root.addView(bottomNav(mode.equals(MODE_HISTORY) || mode.equals(MODE_COLLECT) ? 2 : -1));
         setContentView(root);
     }
 
