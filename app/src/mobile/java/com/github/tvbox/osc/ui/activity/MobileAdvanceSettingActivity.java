@@ -74,7 +74,7 @@ public class MobileAdvanceSettingActivity extends MobileBaseActivity {
         addDivider(home);
         addBool(home, "聚合搜索", HawkConfig.FAST_SEARCH_MODE, true, "多站点同时搜索");
         addDivider(home);
-        addToggle(home, "下次进入", HawkConfig.DEFAULT_LOAD_LIVE, false,
+        addToggle(home, "下次进入", HawkConfig.DEFAULT_LOAD_LIVE, 0,
                 new String[]{"点播", "直播"}, new int[]{0, 1}, "下次打开显示的页面");
         box.addView(home, cardLp());
 
