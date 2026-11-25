@@ -22,12 +22,25 @@ public final class MobileDataInitializer {
 
     private static boolean configReady = false;
     private static boolean jarReady = false;
+    /** 配置地址发生变化后置位；页面返回前台时据此强制重新加载，而不是沿用旧缓存。 */
+    private static boolean configDirty = false;
 
     private MobileDataInitializer() {}
 
     public static void reset() {
         configReady = false;
         jarReady = false;
+    }
+
+    public static void markConfigDirty() {
+        configDirty = true;
+        reset();
+    }
+
+    public static boolean consumeConfigDirty() {
+        boolean dirty = configDirty;
+        configDirty = false;
+        return dirty;
     }
 
     public static boolean isReady() {
