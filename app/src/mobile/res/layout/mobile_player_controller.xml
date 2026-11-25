@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  手机端触摸控制器布局。
+  GestureVideoController 本身不依赖任何具体控件 id，
+  这里只放一个半透明的提示条，用于手势操作时显示信息。
+  触摸手势（单击显隐、双击播放暂停、左右滑进度、上下滑亮度/音量）
+  由控制器基类实现，无需额外控件。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <TextView
+        android:id="@+id/mobile_player_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="48dp"
+        android:background="#88000000"
+        android:padding="10dp"
+        android:text="双击播放/暂停 · 左右滑动调进度"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp" />
+
+</FrameLayout>
