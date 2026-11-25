@@ -110,6 +110,40 @@ public class MobileListActivity extends MobileBaseActivity {
         } else {
             etQuery = new EditText(this); // 占位，搜索模式外不可见
             etQuery.setVisibility(View.GONE);
+            // 历史 / 收藏 两个 Tab（TV 端为两个独立页面，手机端合并入口）
+            LinearLayout tabs = new LinearLayout(this);
+            tabs.setOrientation(LinearLayout.HORIZONTAL);
+            tabs.setPadding(pad, dp(6), pad, dp(2));
+            TextView tabHistory = text("观看历史", 15,
+                    Color.parseColor(MODE_HISTORY.equals(mode) ? C_ACCENT : C_TEXT_2),
+                    MODE_HISTORY.equals(mode));
+            tabHistory.setGravity(Gravity.CENTER);
+            tabHistory.setPadding(0, dp(8), 0, dp(8));
+            tabHistory.setBackground(roundBg(MODE_HISTORY.equals(mode) ? C_CARD_2 : C_CARD, dp(6)));
+            tabHistory.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (!MODE_HISTORY.equals(mode)) openMode(MODE_HISTORY);
+                }
+            });
+            TextView tabCollect = text("我的收藏", 15,
+                    Color.parseColor(MODE_COLLECT.equals(mode) ? C_ACCENT : C_TEXT_2),
+                    MODE_COLLECT.equals(mode));
+            tabCollect.setGravity(Gravity.CENTER);
+            tabCollect.setPadding(0, dp(8), 0, dp(8));
+            tabCollect.setBackground(roundBg(MODE_COLLECT.equals(mode) ? C_CARD_2 : C_CARD, dp(6)));
+            tabCollect.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (!MODE_COLLECT.equals(mode)) openMode(MODE_COLLECT);
+                }
+            });
+            tabs.addView(tabHistory, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            LinearLayout.LayoutParams cpl = new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            cpl.leftMargin = dp(8);
+            tabs.addView(tabCollect, cpl);
+            root.addView(tabs, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
 
         tvStatus = text("", 12, C_TEXT_2, false);
@@ -125,6 +159,14 @@ public class MobileListActivity extends MobileBaseActivity {
 
         root.addView(bottomNav(mode.equals(MODE_HISTORY) || mode.equals(MODE_COLLECT) ? 2 : -1));
         setContentView(root);
+    }
+
+    private void openMode(String newMode) {
+        Intent intent = new Intent(this, MobileListActivity.class);
+        intent.putExtra(EXTRA_MODE, newMode);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        startActivity(intent);
+        finish();
     }
 
     private void observeData() {
