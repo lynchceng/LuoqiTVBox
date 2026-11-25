@@ -2,10 +2,13 @@ package com.github.tvbox.osc.ui.base;
 
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -16,6 +19,12 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.github.tvbox.osc.util.HawkConfig;
+
+import com.orhanobut.hawk.Hawk;
+
+import java.io.File;
 
 /**
  * 手机竖屏版公共基类。
@@ -167,28 +176,37 @@ public abstract class MobileBaseActivity extends AppCompatActivity {
         return bar;
     }
 
-    /** 创建根容器（深色背景 + 纵向）。 */
+    /** 创建根容器（深色背景/用户壁纸 + 纵向）。 */
     public LinearLayout root() {
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.VERTICAL);
         r.setBackgroundColor(Color.parseColor(C_BG));
+        try {
+            String path = Hawk.get("mobile_wallpaper_path", "");
+            if (!TextUtils.isEmpty(path) && new File(path).exists()) {
+                BitmapDrawable d = new BitmapDrawable(getResources(), BitmapFactory.decodeFile(path));
+                d.setAlpha(Hawk.get("mobile_wallpaper_blur", false) ? 150 : 255);
+                r.setBackground(d);
+            }
+        } catch (Throwable ignored) {
+            r.setBackgroundColor(Color.parseColor(C_BG));
+        }
         r.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         return r;
     }
 
-    /** 底部导航（主页/直播/短剧/历史收藏/我的）。current: 0-4，-1 表示无高亮。 */
+    /** 底部导航（主页/直播/历史收藏/我的）。current: 0-3，-1 表示无高亮。 */
     public LinearLayout bottomNav(final int current) {
         LinearLayout nav = new LinearLayout(this);
         nav.setOrientation(LinearLayout.HORIZONTAL);
         nav.setBackgroundColor(Color.parseColor("#0B1422"));
         nav.setPadding(0, dp(8), 0, dp(8));
 
-        String[] labels = {"主页", "直播", "短剧", "历史/收藏", "我的"};
+        String[] labels = {"主页", "直播", "历史/收藏", "我的"};
         final Class<?>[] targets = {
                 com.github.tvbox.osc.ui.activity.MobileHomeActivity.class,
                 com.github.tvbox.osc.ui.activity.MobileLiveActivity.class,
-                com.github.tvbox.osc.ui.activity.MobileListActivity.class, // 短剧 -> 分类浏览
                 com.github.tvbox.osc.ui.activity.MobileListActivity.class,
                 com.github.tvbox.osc.ui.activity.MobileSettingActivity.class
         };
@@ -209,23 +227,18 @@ public abstract class MobileBaseActivity extends AppCompatActivity {
         return nav;
     }
 
-    /** 底部导航点击默认行为；子类可覆写以处理"历史/收藏"等多模式入口。 */
+    /** 底部导航点击默认行为；「历史/收藏」默认进入历史，页面内可切换到收藏。 */
     protected void onNavClick(int index, Class<?> target) {
-        if (index == 3) {
-            // 历史/收藏 -> 历史模式
+        if (index == 2) {
             Intent intent = new Intent(this, target);
             intent.putExtra("mode", "history");
             startActivity(intent);
             return;
         }
-        if (index == 2) {
-            // 短剧 -> 分类浏览模式（用首页的推荐/搜索承载）
-            Intent intent = new Intent(this, com.github.tvbox.osc.ui.activity.MobileHomeActivity.class);
-            startActivity(intent);
-            return;
-        }
         if (target != null && !target.equals(getClass())) {
-            startActivity(new Intent(this, target));
+            Intent intent = new Intent(this, target);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            startActivity(intent);
         }
     }
 
