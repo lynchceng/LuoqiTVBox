@@ -80,7 +80,7 @@ public class MobileSettingActivity extends MobileBaseActivity {
         // ===== 配置 =====
         group("配置");
         addBool("调试模式", HawkConfig.DEBUG_OPEN, false, "已打开", "已关闭", null);
-        addRow("配置地址", shortUrl(str(HawkConfig.API_URL)) + " ›",
+        addRow("配置地址", shortUrl(apiInputForDisplay()) + " ›",
                 new View.OnClickListener() {
                     @Override public void onClick(View v) { openApiConfig(); }
                 });
@@ -289,9 +289,13 @@ public class MobileSettingActivity extends MobileBaseActivity {
                         String newApi = HistoryHelper.getApiLineUrl(lines.get(which));
                         dialog.dismiss();
                         if (TextUtils.isEmpty(newApi)) return;
+                        // 线路切换只改当前生效地址，保留用户原始订阅地址回显
+                        Hawk.put(HawkConfig.API_URL, newApi);
                         Hawk.put(HawkConfig.LIVE_API_URL, newApi);
                         HistoryHelper.setLiveApiHistory(newApi);
-                        applyApi(newApi);
+                        MobileDataInitializer.markConfigDirty();
+                        toast("线路已切换，正在重新加载");
+                        backToHome();
                     }
                 })
                 .setNegativeButton("取消", null)
@@ -300,6 +304,7 @@ public class MobileSettingActivity extends MobileBaseActivity {
 
     private void applyApi(String value) {
         Hawk.put(HawkConfig.API_URL, value);
+        Hawk.put(MobileApiConfigActivity.KEY_API_INPUT, value);
         if (!HistoryHelper.isApiLineHistory(value)) HistoryHelper.clearApiLineList();
         MobileDataInitializer.markConfigDirty();
         toast("配置已切换，正在重新加载");
@@ -542,6 +547,12 @@ public class MobileSettingActivity extends MobileBaseActivity {
     }
 
     // ===== 显示值 =====
+    /** 优先回显用户原始输入的订阅地址，避免被 TV 的多线路逻辑改写后显示成配置内某个站点。 */
+    private String apiInputForDisplay() {
+        String v = str(MobileApiConfigActivity.KEY_API_INPUT);
+        return TextUtils.isEmpty(v) ? str(HawkConfig.API_URL) : v;
+    }
+
     /** 显示订阅地址本身（不是当前站点名），与 TV tvApi.setText(API_URL) 一致。 */
     private String shortUrl(String url) {
         if (TextUtils.isEmpty(url)) return "未配置";
