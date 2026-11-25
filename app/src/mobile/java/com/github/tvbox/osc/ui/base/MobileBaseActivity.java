@@ -82,6 +82,16 @@ public abstract class MobileBaseActivity extends AppCompatActivity {
         return tv;
     }
 
+    /** 重载：接受 int 颜色值（如 Color.parseColor 的返回）。 */
+    public TextView text(String content, int sizeSp, int colorInt, boolean bold) {
+        TextView tv = new TextView(this);
+        tv.setText(content);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
+        tv.setTextColor(colorInt);
+        if (bold) tv.setTypeface(Typeface.DEFAULT_BOLD);
+        return tv;
+    }
+
     // ===== 分组标题（如「配置」「设置」）=====
     public TextView sectionTitle(String title) {
         TextView tv = text(title, 15, C_TEXT_2, true);
