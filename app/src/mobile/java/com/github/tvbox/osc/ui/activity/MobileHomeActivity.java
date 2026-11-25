@@ -111,7 +111,7 @@ public class MobileHomeActivity extends MobileBaseActivity {
         });
         header.addView(search);
 
-        tvSourceName = text("选择站点 ▾", 13, C_ACCENT, false);
+        tvSourceName = text("当前站点 ▾", 13, C_ACCENT, false);
         tvSourceName.setPadding(dp(8), dp(4), dp(8), dp(4));
         tvSourceName.setBackground(roundBg(C_CARD_2, dp(6)));
         tvSourceName.setOnClickListener(new View.OnClickListener() {
@@ -173,7 +173,8 @@ public class MobileHomeActivity extends MobileBaseActivity {
                     tvStatus.setText("数据源已加载，但没有可用站点");
                     return;
                 }
-                tvSourceName.setText(TextUtils.isEmpty(home.getName()) ? "站点" : home.getName());
+                // 明确标注这是「当前站点」，避免与订阅配置地址混淆
+                tvSourceName.setText("站点 · " + (TextUtils.isEmpty(home.getName()) ? "默认" : home.getName()) + " ▾");
                 tvStatus.setText("正在获取分类与推荐…");
                 viewModel.getSort(home.getKey());
             }
