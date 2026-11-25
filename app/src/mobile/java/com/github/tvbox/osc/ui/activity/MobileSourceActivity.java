@@ -1,5 +1,6 @@
 package com.github.tvbox.osc.ui.activity;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
@@ -31,12 +32,20 @@ public class MobileSourceActivity extends MobileBaseActivity {
         scroll.addView(list, new ScrollView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
+        // 配置入口常驻：没有站点时也能直接进入 JSON 订阅地址配置
+        list.addView(settingRow("配置订阅地址", "点播 / 直播 ›", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(MobileSourceActivity.this, MobileApiConfigActivity.class));
+            }
+        }));
+        addDivider(list);
+
         List<SourceBean> sites = ApiConfig.get().getSwitchSourceBeanList();
         SourceBean current = ApiConfig.get().getHomeSourceBean();
         String currentKey = current == null ? "" : current.getKey();
 
         if (sites == null || sites.isEmpty()) {
-            TextView empty = text("暂无站点，请先在设置中配置订阅地址", 14, C_TEXT_2, false);
+            TextView empty = text("暂无站点，请先在上方配置订阅地址", 14, C_TEXT_2, false);
             empty.setPadding(0, dp(40), 0, 0);
             empty.setGravity(android.view.Gravity.CENTER);
             list.addView(empty);
@@ -49,7 +58,7 @@ public class MobileSourceActivity extends MobileBaseActivity {
                         value, new View.OnClickListener() {
                             @Override public void onClick(View v) {
                                 ApiConfig.get().setSourceBean(bean);
-                                MobileDataInitializer.reset();
+                                MobileDataInitializer.markConfigDirty();
                                 toast("已切换到：" + bean.getName());
                                 setResult(RESULT_OK);
                                 finish();
