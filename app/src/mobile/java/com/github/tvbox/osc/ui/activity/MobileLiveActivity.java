@@ -249,6 +249,11 @@ public class MobileLiveActivity extends MobileBaseActivity {
     @Override protected void onResume() {
         super.onResume();
         if (videoView != null) videoView.resume();
+        // 配置地址变化后重新拉取直播订阅，避免继续用旧配置
+        if (MobileDataInitializer.consumeConfigDirty()) {
+            groups.clear();
+            loadLive();
+        }
     }
     @Override protected void onDestroy() {
         if (videoView != null) videoView.release();
