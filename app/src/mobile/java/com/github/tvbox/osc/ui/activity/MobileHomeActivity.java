@@ -85,6 +85,15 @@ public class MobileHomeActivity extends MobileBaseActivity {
         header.addView(brand, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
+        TextView push = text("⚡", 20, C_TEXT, false);
+        push.setPadding(dp(10), 0, dp(6), 0);
+        push.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(MobileHomeActivity.this, MobilePushActivity.class));
+            }
+        });
+        header.addView(push);
+
         TextView search = text("🔍", 20, C_TEXT, false);
         search.setPadding(dp(10), 0, dp(6), 0);
         search.setOnClickListener(new View.OnClickListener() {
