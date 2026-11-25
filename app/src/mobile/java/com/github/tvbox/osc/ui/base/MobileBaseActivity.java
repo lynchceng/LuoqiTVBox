@@ -196,14 +196,14 @@ public abstract class MobileBaseActivity extends AppCompatActivity {
         return r;
     }
 
-    /** 底部导航（主页/直播/历史收藏/我的）。current: 0-3，-1 表示无高亮。 */
+    /** 底部导航（主页/直播/历史收藏/设置）。current: 0-3，-1 表示无高亮。 */
     public LinearLayout bottomNav(final int current) {
         LinearLayout nav = new LinearLayout(this);
         nav.setOrientation(LinearLayout.HORIZONTAL);
         nav.setBackgroundColor(Color.parseColor("#0B1422"));
         nav.setPadding(0, dp(8), 0, dp(8));
 
-        String[] labels = {"主页", "直播", "历史/收藏", "我的"};
+        String[] labels = {"主页", "直播", "历史/收藏", "设置"};
         final Class<?>[] targets = {
                 com.github.tvbox.osc.ui.activity.MobileHomeActivity.class,
                 com.github.tvbox.osc.ui.activity.MobileLiveActivity.class,
