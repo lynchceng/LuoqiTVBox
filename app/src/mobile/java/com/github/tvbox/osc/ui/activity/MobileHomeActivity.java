@@ -60,6 +60,10 @@ public class MobileHomeActivity extends MobileBaseActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // 与 TV HomeActivity 一致：启动 127.0.0.1:9978 本地代理服务。
+        // ApiConfig.loadLiveApi 会把直播源包装成 http://127.0.0.1:9978/proxy?do=live&...，
+        // 不启动该服务，JSON 里内嵌的直播（lives）就无法加载。startServer 内部幂等。
+        try { com.github.tvbox.osc.server.ControlManager.get().startServer(); } catch (Throwable ignored) {}
         viewModel = new ViewModelProvider(this).get(SourceViewModel.class);
         buildUI();
         observeData();
