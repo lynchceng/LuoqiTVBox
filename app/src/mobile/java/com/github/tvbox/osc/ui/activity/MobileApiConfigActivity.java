@@ -34,6 +34,13 @@ import java.util.ArrayList;
 public class MobileApiConfigActivity extends MobileBaseActivity {
 
     public static final String EXTRA_FOCUS = "focus";
+    /**
+     * 手机端单独保存「用户原始输入的订阅地址」。
+     * TV 的 ApiConfig.switchApiCollectionIfNeeded() 在解析线路合集时会把 HawkConfig.API_URL
+     * 覆写成配置内的第一条线路地址，直接用 API_URL 回显会让用户以为配置被换成了某个站点。
+     */
+    public static final String KEY_API_INPUT = "mobile_api_input";
+    public static final String KEY_LIVE_API_INPUT = "mobile_live_api_input";
     private EditText etApi;
     private EditText etLive;
     private EditText importTarget;
@@ -53,7 +60,8 @@ public class MobileApiConfigActivity extends MobileBaseActivity {
 
         box.addView(sectionTitle("点播订阅（JSON 配置地址）"));
         LinearLayout apiCard = card();
-        String api = str(HawkConfig.API_URL);
+        String api = str(KEY_API_INPUT);          // 优先回显用户原始输入
+        if (TextUtils.isEmpty(api)) api = str(HawkConfig.API_URL);
         etApi = input("输入订阅地址，例如 http://.../config.json");
         etApi.setText(api);
         etApi.setSelection(etApi.getText().length());
@@ -76,7 +84,8 @@ public class MobileApiConfigActivity extends MobileBaseActivity {
 
         box.addView(sectionTitle("直播订阅（可选）"));
         LinearLayout liveCard = card();
-        String live = str(HawkConfig.LIVE_API_URL);
+        String live = str(KEY_LIVE_API_INPUT);
+        if (TextUtils.isEmpty(live)) live = str(HawkConfig.LIVE_API_URL);
         if (TextUtils.isEmpty(live)) live = api;
         etLive = input("直播订阅地址，留空则使用点播地址");
         etLive.setText(live);
@@ -257,6 +266,9 @@ public class MobileApiConfigActivity extends MobileBaseActivity {
         HistoryHelper.setLiveApiHistory(newLive);
         Hawk.put(HawkConfig.API_URL, newApi);
         Hawk.put(HawkConfig.LIVE_API_URL, newLive);
+        // 保存原始输入，避免 TV 的多线路逻辑改写 API_URL 后回显成配置内某个站点
+        Hawk.put(KEY_API_INPUT, newApi);
+        Hawk.put(KEY_LIVE_API_INPUT, newLive);
 
         if (!newApi.equals(oldApi)) {
             // 让首页/直播页在返回后强制重新初始化，避免停留在旧数据
