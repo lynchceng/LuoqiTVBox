@@ -342,7 +342,10 @@ public class MobilePlayActivity extends MobileBaseActivity {
             @Override public void run() {
                 try {
                     String api = pb.getUrl() + java.net.URLEncoder.encode(target, "UTF-8");
-                    HashMap<String, String> reqHeaders = extHeaders(pb);
+                    com.lzy.okgo.model.HttpHeaders reqHeaders = new com.lzy.okgo.model.HttpHeaders();
+                    for (Map.Entry<String, String> e : extHeaders(pb).entrySet()) {
+                        reqHeaders.put(e.getKey(), e.getValue());
+                    }
                     String resp = com.lzy.okgo.OkGo.<String>get(api).headers(reqHeaders)
                             .execute().body().string();
                     JSONObject rs = parseJsonResult(resp, target);
