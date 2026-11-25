@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.github.tvbox.osc">
+
+    <!--
+      手机竖屏版 Manifest：与 main 合并。
+      TV 全部功能代码保留在 src/main（手机包也编译进去，共享数据层完全复用），
+      这里只把桌面入口换成竖屏首页，并注册手机端竖屏 Activity。
+    -->
+    <application>
+
+        <!-- 移除 TV 首页桌面入口（类本身保留，避免双 launcher） -->
+        <activity android:name=".ui.activity.HomeActivity" tools:node="remove" />
+
+        <!-- 手机首页（竖屏，launcher） -->
+        <activity
+            android:name=".ui.activity.MobileHomeActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 手机详情页 -->
+        <activity
+            android:name=".ui.activity.MobileDetailActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 手机播放页 -->
+        <activity
+            android:name=".ui.activity.MobilePlayActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 手机直播页 -->
+        <activity
+            android:name=".ui.activity.MobileLiveActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 手机通用列表页（搜索/历史/收藏/分类） -->
+        <activity
+            android:name=".ui.activity.MobileListActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 手机设置页 -->
+        <activity
+            android:name=".ui.activity.MobileSettingActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 手机站点切换 / 配置地址页 -->
+        <activity
+            android:name=".ui.activity.MobileSourceActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 手机高级设置页 -->
+        <activity
+            android:name=".ui.activity.MobileAdvanceSettingActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 手机推送页 -->
+        <activity
+            android:name=".ui.activity.MobilePushActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 手机竖屏设计基准（覆盖 TV 的 1280x720） -->
+        <meta-data
+            android:name="design_width_in_dp"
+            android:value="360"
+            tools:replace="android:value" />
+        <meta-data
+            android:name="design_height_in_dp"
+            android:value="640"
+            tools:replace="android:value" />
+
+    </application>
+
+</manifest>
