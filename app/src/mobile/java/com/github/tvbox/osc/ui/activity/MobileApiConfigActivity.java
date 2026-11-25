@@ -36,6 +36,8 @@ public class MobileApiConfigActivity extends MobileBaseActivity {
     public static final String EXTRA_FOCUS = "focus";
     private EditText etApi;
     private EditText etLive;
+    private EditText importTarget;
+    private static final int REQ_IMPORT = 2001;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -66,6 +68,10 @@ public class MobileApiConfigActivity extends MobileBaseActivity {
                 showHistory(HawkConfig.API_HISTORY, etApi);
             }
         }));
+        addDivider(apiCard);
+        apiCard.addView(actionRow("从本地文件导入", new View.OnClickListener() {
+            @Override public void onClick(View v) { importFromFile(etApi); }
+        }));
         box.addView(apiCard, cardLp());
 
         box.addView(sectionTitle("直播订阅（可选）"));
@@ -85,6 +91,10 @@ public class MobileApiConfigActivity extends MobileBaseActivity {
             @Override public void onClick(View v) {
                 showHistory(HawkConfig.LIVE_API_HISTORY, etLive);
             }
+        }));
+        addDivider(liveCard);
+        liveCard.addView(actionRow("从本地文件导入", new View.OnClickListener() {
+            @Override public void onClick(View v) { importFromFile(etLive); }
         }));
         box.addView(liveCard, cardLp());
 
@@ -190,6 +200,41 @@ public class MobileApiConfigActivity extends MobileBaseActivity {
                 })
                 .setNegativeButton("取消", null)
                 .show();
+    }
+
+    /** 从本地 JSON 文件导入订阅地址，对应 TV 的 openLocalConfig。 */
+    private void importFromFile(EditText target) {
+        importTarget = target;
+        try {
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("*/*");
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            startActivityForResult(Intent.createChooser(intent, "选择配置文件"), REQ_IMPORT);
+        } catch (Throwable t) {
+            toast("无法打开文件选择器");
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_IMPORT || resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        try {
+            java.io.InputStream in = getContentResolver().openInputStream(data.getData());
+            if (in == null) { toast("读取文件失败"); return; }
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            in.close();
+            String content = new String(out.toByteArray(), "UTF-8").trim();
+            if (importTarget != null) {
+                importTarget.setText(content);
+                importTarget.setSelection(importTarget.getText().length());
+            }
+            toast("已导入本地配置");
+        } catch (Throwable t) {
+            toast("读取文件失败：" + t.getMessage());
+        }
     }
 
     private void save() {
