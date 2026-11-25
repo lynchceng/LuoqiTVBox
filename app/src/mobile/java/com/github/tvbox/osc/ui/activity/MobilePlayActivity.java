@@ -265,14 +265,15 @@ public class MobilePlayActivity extends MobileBaseActivity {
             startPlay(url, headers);
             return;
         }
+        final ParseBean finalParse = chosen;
         final String target = url;
         final Map<String, String> h = headers;
-        if (chosen.getType() == 1 && !TextUtils.isEmpty(chosen.getUrl())) {
+        if (finalParse.getType() == 1 && !TextUtils.isEmpty(finalParse.getUrl())) {
             // JSON 解析：OkGo 同步请求解析接口，读取 data.url / url
             new Thread(new Runnable() {
                 @Override public void run() {
                     try {
-                        String api = chosen.getUrl() + java.net.URLEncoder.encode(target, "UTF-8");
+                        String api = finalParse.getUrl() + java.net.URLEncoder.encode(target, "UTF-8");
                         String resp = com.lzy.okgo.OkGo.get(api).execute().body().string();
                         JSONObject jo = new JSONObject(resp);
                         String real = jo.optString("url", "");
