@@ -61,12 +61,20 @@
             android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
-        <!-- 手机站点切换 / 配置地址页 -->
+        <!-- 手机站点切换页 -->
         <activity
             android:name=".ui.activity.MobileSourceActivity"
             android:exported="false"
             android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 手机订阅地址配置页（点播 JSON / 直播） -->
+        <activity
+            android:name=".ui.activity.MobileApiConfigActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize" />
 
         <!-- 手机高级设置页 -->
         <activity
@@ -78,6 +86,20 @@
         <!-- 手机推送页 -->
         <activity
             android:name=".ui.activity.MobilePushActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 手机关于页 -->
+        <activity
+            android:name=".ui.activity.MobileAboutActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 手机网页嗅探解析页（对应 TV loadWebView） -->
+        <activity
+            android:name=".ui.activity.MobileWebParseActivity"
             android:exported="false"
             android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|keyboardHidden" />
