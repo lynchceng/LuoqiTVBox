@@ -27,6 +27,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,6 +47,8 @@ public class MobilePlayActivity extends MobileBaseActivity {
     public static final String EXTRA_ID = "id";
     public static final String EXTRA_SOURCE_KEY = "sourceKey";
     public static final String EXTRA_NAME = "name";
+    private static final int REQ_WEB_PARSE = 1001;
+    private Map<String, String> pendingHeaders;
 
     private SourceViewModel viewModel;
     private VideoView videoView;
@@ -250,53 +253,244 @@ public class MobilePlayActivity extends MobileBaseActivity {
         }
     }
 
-    /** 调用 TV 的解析器（ParseBean type 0-4），解析成功后回 startPlay。 */
+    /** 调用 TV 的解析器（ParseBean type 0-4），与 TV PlayFragment.initParse/doParse 行为一致。 */
     private void doParse(String playUrl, String url, Map<String, String> headers, String flag) {
         List<ParseBean> parses = ApiConfigSafe.parses();
         ParseBean chosen = null;
         if (!TextUtils.isEmpty(playUrl) && playUrl.startsWith("json:")) {
+            // TV initParse: json:xxx 直接按名称使用某个 JSON 解析器
             String name = playUrl.substring(5);
+            for (ParseBean p : parses) if (name.equals(p.getName())) { chosen = p; break; }
+            if (chosen == null) {
+                chosen = new ParseBean();
+                chosen.setType(1);
+                chosen.setUrl(name);
+            }
+        } else if (!TextUtils.isEmpty(playUrl) && playUrl.startsWith("parse:")) {
+            String name = playUrl.substring(6);
             for (ParseBean p : parses) if (name.equals(p.getName())) { chosen = p; break; }
         }
         if (chosen == null) chosen = ApiConfigSafe.defaultParse();
         if (chosen == null) {
-            // 没有解析器，尝试直接播放原始地址
-            tvTip.setText("无可用解析器，尝试直连");
+            tvTip.setText("未配置解析器，尝试直连");
             startPlay(url, headers);
             return;
         }
-        final ParseBean finalParse = chosen;
+
+        final ParseBean pb = chosen;
         final String target = url;
-        final Map<String, String> h = headers;
-        if (finalParse.getType() == 1 && !TextUtils.isEmpty(finalParse.getUrl())) {
-            // JSON 解析：OkGo 同步请求解析接口，读取 data.url / url
-            new Thread(new Runnable() {
-                @Override public void run() {
-                    try {
-                        String api = finalParse.getUrl() + java.net.URLEncoder.encode(target, "UTF-8");
-                        String resp = com.lzy.okgo.OkGo.get(api).execute().body().string();
-                        JSONObject jo = new JSONObject(resp);
-                        String real = jo.optString("url", "");
-                        if (TextUtils.isEmpty(real) && jo.has("data")) {
-                            real = jo.optJSONObject("data").optString("url", "");
-                        }
-                        final String finalUrl = real;
-                        runOnUiThread(new Runnable() {
-                            @Override public void run() {
-                                if (!TextUtils.isEmpty(finalUrl)) startPlay(finalUrl, h);
-                                else tvTip.setText("解析失败，请切换线路");
-                            }
-                        });
-                    } catch (final Throwable t) {
-                        runOnUiThread(new Runnable() {
-                            @Override public void run() { tvTip.setText("解析失败：" + t.getMessage()); }
-                        });
-                    }
+        final Map<String, String> baseHeaders = headers;
+        final String parseFlag = flag;
+        switch (pb.getType()) {
+            case 0:
+                // 网页嗅探：手机端用 WebView 完成，不再提示去电视端
+                HashMap<String, String> webHeaders = extHeaders(pb);
+                String ua = null;
+                if (webHeaders != null) {
+                    ua = webHeaders.remove("user-agent");
+                    if (ua != null) ua = ua.trim();
                 }
-            }).start();
-        } else {
-            tvTip.setText("该视频需网页解析，请切换其他线路或使用电视版播放");
+                openWebParse(TextUtils.isEmpty(pb.getUrl()) ? target : pb.getUrl() + target,
+                        ua, webHeaders, baseHeaders);
+                break;
+            case 1:
+                jsonParseAsync(pb, target, baseHeaders);
+                break;
+            case 2:
+                jsonExtAsync(pb, target, baseHeaders);
+                break;
+            case 3:
+            case 4:
+                mixParseAsync(pb, target, baseHeaders, parseFlag);
+                break;
+            default:
+                startPlay(target, baseHeaders);
+                break;
         }
+    }
+
+    /** 从解析器 ext 中读取自定义请求头（TV getHeaders 的等价实现）。 */
+    private HashMap<String, String> extHeaders(ParseBean pb) {
+        HashMap<String, String> map = new HashMap<>();
+        if (pb == null || TextUtils.isEmpty(pb.getExt())) return map;
+        try {
+            JSONObject ext = new JSONObject(pb.getExt());
+            java.util.Iterator<String> it = ext.keys();
+            while (it.hasNext()) {
+                String key = it.next();
+                Object val = ext.get(key);
+                if (val instanceof JSONObject) {
+                    java.util.Iterator<String> it2 = ((JSONObject) val).keys();
+                    while (it2.hasNext()) {
+                        String k2 = it2.next();
+                        if (!((JSONObject) val).get(k2).equals("")) {
+                            map.put(k2, String.valueOf(((JSONObject) val).get(k2)));
+                        }
+                    }
+                } else if (val instanceof String) {
+                    map.put(key, (String) val);
+                }
+            }
+        } catch (Throwable ignored) {}
+        return map;
+    }
+
+    /** type=1 JSON 解析：请求解析接口并识别 data.url / url / video:// / parse=1。 */
+    private void jsonParseAsync(final ParseBean pb, final String target, final Map<String, String> baseHeaders) {
+        tvTip.setText("正在解析视频…");
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    String api = pb.getUrl() + java.net.URLEncoder.encode(target, "UTF-8");
+                    HashMap<String, String> reqHeaders = extHeaders(pb);
+                    String resp = com.lzy.okgo.OkGo.<String>get(api).headers(reqHeaders)
+                            .execute().body().string();
+                    JSONObject rs = parseJsonResult(resp, target);
+                    handleParseResult(rs, target, baseHeaders);
+                } catch (final Throwable t) {
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() { tvTip.setText("解析失败：" + t.getMessage()); }
+                    });
+                }
+            }
+        }).start();
+    }
+
+    /** 解析 JSON 结果，结构与 TV PlayFragment.jsonParse 一致。 */
+    private JSONObject parseJsonResult(String json, String original) throws Exception {
+        JSONObject root = new JSONObject(json);
+        JSONObject data = root.optJSONObject("data");
+        if (data == null) data = root;
+        String real = data.optString("url", root.optString("url", ""));
+        if (real.startsWith("//")) real = "http:" + real;
+        if (real.startsWith("video://")) {
+            real = real.substring(8);
+            JSONObject rs = new JSONObject();
+            rs.put("url", real);
+            rs.put("parse", 1);
+            return rs;
+        }
+        real = com.github.tvbox.osc.util.DefaultConfig.checkReplaceProxy(real);
+        if (!real.startsWith("http") && !real.startsWith("data:application")) return null;
+        JSONObject rs = new JSONObject();
+        rs.put("url", real);
+        rs.put("parse", root.optInt("parse", data.optInt("parse", 0)));
+        rs.put("ua", root.optString("ua", data.optString("ua", "")));
+        JSONObject h = data.optJSONObject("header");
+        if (h == null) h = data.optJSONObject("headers");
+        if (h == null) h = root.optJSONObject("header");
+        if (h == null) h = root.optJSONObject("headers");
+        if (h != null) rs.put("header", h);
+        return rs;
+    }
+
+    /** type=2 JSON 扩展解析：复用 ApiConfig.jsonExt（TV jarLoader 同一实现）。 */
+    private void jsonExtAsync(final ParseBean pb, final String target, final Map<String, String> baseHeaders) {
+        tvTip.setText("正在解析视频…");
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    LinkedHashMap<String, String> jxs = new LinkedHashMap<>();
+                    for (ParseBean p : ApiConfigSafe.parses()) {
+                        if (p.getType() == 1) jxs.put(p.getName(), p.mixUrl());
+                    }
+                    final JSONObject rs = com.github.tvbox.osc.api.ApiConfig.get()
+                            .jsonExt(pb.getUrl(), jxs, target);
+                    handleParseResult(rs, target, baseHeaders);
+                } catch (final Throwable t) {
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() { tvTip.setText("解析失败：" + t.getMessage()); }
+                    });
+                }
+            }
+        }).start();
+    }
+
+    /** type=3/4 聚合解析：复用 TV 的 jsonExtMix / SuperParse。 */
+    private void mixParseAsync(final ParseBean pb, final String target,
+                               final Map<String, String> baseHeaders, final String flag) {
+        tvTip.setText("正在聚合解析…");
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    LinkedHashMap<String, HashMap<String, String>> jxs = new LinkedHashMap<>();
+                    String extendName = "";
+                    for (ParseBean p : ApiConfigSafe.parses()) {
+                        HashMap<String, String> data = new HashMap<>();
+                        data.put("url", p.getUrl());
+                        data.put("type", String.valueOf(p.getType()));
+                        data.put("ext", p.getExt());
+                        jxs.put(p.getName(), data);
+                        if (p.getName().equals(pb.getName())) extendName = p.getName();
+                    }
+                    JSONObject rs;
+                    if (pb.getType() == 4) {
+                        rs = com.github.tvbox.osc.util.parser.SuperParse.parse(
+                                jxs, flag + "123", target);
+                    } else {
+                        rs = com.github.tvbox.osc.api.ApiConfig.get().jsonExtMix(
+                                flag + "111", pb.getUrl(), extendName, jxs, target);
+                    }
+                    handleParseResult(rs, target, baseHeaders);
+                } catch (final Throwable t) {
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() { tvTip.setText("解析失败：" + t.getMessage()); }
+                    });
+                }
+            }
+        }).start();
+    }
+
+    /** 解析结果统一处理：parse=1 走网页嗅探，否则直接播放。 */
+    private void handleParseResult(final JSONObject rs, final String original,
+                                   final Map<String, String> baseHeaders) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (destroyed) return;
+                if (rs == null) {
+                    tvTip.setText("解析失败，请切换线路");
+                    return;
+                }
+                String real = rs.optString("url", "");
+                if (TextUtils.isEmpty(real)) {
+                    tvTip.setText("解析失败，请切换线路");
+                    return;
+                }
+                Map<String, String> h = parseHeaders(rs);
+                if (h == null || h.isEmpty()) h = baseHeaders;
+                String ua = rs.optString("ua", "");
+                if (rs.optInt("parse", 0) == 1) {
+                    openWebParse(com.github.tvbox.osc.util.DefaultConfig.checkReplaceProxy(real),
+                            ua, null, h);
+                } else {
+                    startPlay(real, h);
+                }
+            }
+        });
+    }
+
+    /** 打开手机端网页嗅探页，结果通过 onActivityResult 回到播放页。 */
+    private void openWebParse(String url, String ua, HashMap<String, String> reqHeaders,
+                              Map<String, String> playHeaders) {
+        pendingHeaders = playHeaders;
+        Intent intent = new Intent(this, MobileWebParseActivity.class);
+        intent.putExtra(MobileWebParseActivity.EXTRA_URL, url);
+        intent.putExtra(MobileWebParseActivity.EXTRA_UA, ua);
+        if (reqHeaders != null) intent.putExtra(MobileWebParseActivity.EXTRA_HEADERS, reqHeaders);
+        tvTip.setText("正在嗅探播放地址…");
+        startActivityForResult(intent, REQ_WEB_PARSE);
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_WEB_PARSE || destroyed) return;
+        String url = data == null ? "" : data.getStringExtra(MobileWebParseActivity.EXTRA_RESULT_URL);
+        if (TextUtils.isEmpty(url)) {
+            tvTip.setVisibility(View.VISIBLE);
+            tvTip.setText("未嗅探到播放地址，请切换线路重试");
+            return;
+        }
+        startPlay(url, pendingHeaders);
     }
 
     private void startPlay(String url, Map<String, String> headers) {
