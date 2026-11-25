@@ -316,7 +316,7 @@ public class MobileHomeActivity extends MobileBaseActivity {
 
             TextView name = text2(parent.getContext(), "", 12, C_TEXT, false);
             name.setSingleLine(true);
-            name.setEllipsis(android.text.TextUtils.TruncateAt.END);
+            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
             LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             nl.topMargin = dp(5);
