@@ -63,12 +63,18 @@ public class MobileHomeActivity extends MobileBaseActivity {
         viewModel = new ViewModelProvider(this).get(SourceViewModel.class);
         buildUI();
         observeData();
-        // 已配置过订阅地址则直接加载；否则引导去设置页
+        // 状态行可直接点击进入配置页，避免用户找不到入口
+        tvStatus.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(MobileHomeActivity.this, MobileApiConfigActivity.class));
+            }
+        });
+        // 已配置过订阅地址则直接加载；否则引导配置（与 TV 端一致，配置后自动出数据）
         String savedApi = Hawk.get(HawkConfig.API_URL, "");
         if (!TextUtils.isEmpty(savedApi)) {
             loadConfigAndData(false);
         } else {
-            tvStatus.setText("请到「我的 → 设置 → 配置地址」填写订阅地址");
+            tvStatus.setText("尚未配置订阅地址，点此填写 JSON 配置地址");
         }
     }
 
@@ -289,9 +295,15 @@ public class MobileHomeActivity extends MobileBaseActivity {
 
     @Override protected void onResume() {
         super.onResume();
-        // 从设置/站点切换返回后，若数据未就绪则重新加载
-        if (!MobileDataInitializer.isReady() && !TextUtils.isEmpty(Hawk.get(HawkConfig.API_URL, ""))) {
+        // 配置地址变更 / 站点切换后强制重新初始化，保证首页像 TV 一样自动加载数据
+        boolean dirty = MobileDataInitializer.consumeConfigDirty();
+        String savedApi = Hawk.get(HawkConfig.API_URL, "");
+        if (dirty && !TextUtils.isEmpty(savedApi)) {
             loadConfigAndData(true);
+        } else if (!MobileDataInitializer.isReady() && !TextUtils.isEmpty(savedApi)) {
+            loadConfigAndData(false);
+        } else if (TextUtils.isEmpty(savedApi)) {
+            tvStatus.setText("尚未配置订阅地址，点此填写 JSON 配置地址");
         }
     }
 
