@@ -50,6 +50,16 @@ android {
             }
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        // 手机竖屏版：独立包名，可与 TV 版同机共存；复用 src/main 全部 TV 功能层
+        mobile {
+            dimension "mode"
+            applicationId 'com.github.tvbox.osc.mobile'
+            minSdkVersion 21
+            ndk {
+                abiFilters 'armeabi-v7a', 'arm64-v8a'
+            }
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
         python {
             dimension "mode"
             minSdkVersion 19
@@ -86,6 +96,9 @@ android {
             java.srcDirs += 'src/normal/java'
         }
         java64 {
+            java.srcDirs += 'src/normal/java'
+        }
+        mobile {
             java.srcDirs += 'src/normal/java'
         }
         python32 {
@@ -203,3 +216,11 @@ dependencies {
     implementation 'org.brotli:dec:0.1.2'
 }
 
+
+// 手机竖屏版随 TV 包一起构建：现有 workflow 执行 assembleJava32Release/assembleJava64Release
+// 这里让 java64 构建顺带产出手机版 APK（复用 TV 全部功能层，仅 UI 竖屏化），无需改 workflow 文件。
+tasks.whenTaskAdded { task ->
+    if (task.name == 'assembleJava64Release') {
+        task.dependsOn 'assembleMobileRelease'
+    }
+}
