@@ -155,6 +155,9 @@ public class MobileLiveActivity extends MobileBaseActivity {
 
     private void loadLive() {
         try {
+            // TV 端在 HomeActivity 启动 127.0.0.1:9978 代理；直播源被包装成该代理地址，
+            // 这里兜底确保服务已启动（startServer 幂等），否则内嵌 lives 无法加载。
+            try { com.github.tvbox.osc.server.ControlManager.get().startServer(); } catch (Throwable ignored) {}
             ApiConfig.get().loadLiveConfig(true, new ApiConfig.LoadConfigCallback() {
                 @Override public void success() { runOnUiThread(new Runnable() {
                     @Override public void run() {
