@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.bean.AbsXml;
+import com.github.tvbox.osc.event.RefreshEvent;
 import com.github.tvbox.osc.bean.Movie;
 import com.github.tvbox.osc.bean.SourceBean;
 import com.github.tvbox.osc.bean.VodInfo;
@@ -33,8 +34,17 @@ import com.github.tvbox.osc.viewmodel.SourceViewModel;
 
 import com.orhanobut.hawk.Hawk;
 
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
+
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 手机通用列表页：通过 "mode" 区分 搜索 / 历史 / 收藏。
@@ -54,6 +64,12 @@ public class MobileListActivity extends MobileBaseActivity {
     private RecyclerView recyclerView;
     private VodAdapter adapter;
 
+    /** 与 TV SearchActivity 一致：每个站点一个线程，避免在主线程执行爬虫网络请求。 */
+    private ExecutorService searchExecutor;
+    private String currentToken = "";
+    private final AtomicInteger pendingSearches = new AtomicInteger(0);
+    private final Set<String> seenKeys = new HashSet<String>();
+
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Bundle b = getIntent().getExtras();
@@ -61,6 +77,7 @@ public class MobileListActivity extends MobileBaseActivity {
             mode = b.getString(EXTRA_MODE);
         }
         viewModel = new ViewModelProvider(this).get(SourceViewModel.class);
+        EventBus.getDefault().register(this);
         buildUI();
         observeData();
 
@@ -169,18 +186,51 @@ public class MobileListActivity extends MobileBaseActivity {
         finish();
     }
 
-    private void observeData() {
-        viewModel.searchResult.observe(this, new Observer<AbsXml>() {
-            @Override public void onChanged(AbsXml xml) {
-                if (!MODE_SEARCH.equals(mode) || xml == null || xml.movie == null
-                        || xml.movie.videoList == null) return;
-                List<Movie.Video> list = xml.movie.videoList;
-                if (!list.isEmpty()) {
-                    adapter.addData(list);
-                    tvStatus.setText("找到 " + adapter.getItemCount() + " 部");
-                }
+    @Override protected void onDestroy() {
+        try { EventBus.getDefault().unregister(this); } catch (Throwable ignored) {}
+        try { com.lzy.okgo.OkGo.getInstance().cancelTag("search"); } catch (Throwable ignored) {}
+        if (searchExecutor != null) {
+            try { searchExecutor.shutdownNow(); } catch (Throwable ignored) {}
+        }
+        super.onDestroy();
+    }
+
+    /**
+     * 占位：保留与 TV 一致的初始化顺序。
+     * 真正的搜索结果不通过 searchResult LiveData 分发（TV 的 SourceViewModel 对该 LiveData
+     * 从不 postValue），而是统一 EventBus.post(RefreshEvent.TYPE_SEARCH_RESULT)。
+     */
+    private void observeData() {}
+
+    /** 与 TV SearchActivity.refresh(RefreshEvent) 完全相同的接收方式。 */
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onSearchEvent(RefreshEvent event) {
+        if (event == null || event.type != RefreshEvent.TYPE_SEARCH_RESULT) return;
+        if (!MODE_SEARCH.equals(mode)) return;
+        AbsXml xml = null;
+        if (event.obj instanceof AbsXml) xml = (AbsXml) event.obj;
+        // 过滤上一轮搜索迟到的结果
+        if (xml != null && !TextUtils.isEmpty(xml.searchToken)
+                && !xml.searchToken.equals(currentToken)) return;
+        int left = pendingSearches.get() > 0 ? pendingSearches.decrementAndGet() : 0;
+        if (xml != null && xml.movie != null && xml.movie.videoList != null) {
+            List<Movie.Video> fresh = new ArrayList<>();
+            for (Movie.Video v : xml.movie.videoList) {
+                if (v == null || TextUtils.isEmpty(v.id)) continue;
+                String key = (TextUtils.isEmpty(v.sourceKey) ? "" : v.sourceKey) + "|" + v.id;
+                if (seenKeys.add(key)) fresh.add(v);
             }
-        });
+            if (!fresh.isEmpty()) {
+                adapter.addData(fresh);
+                tvStatus.setText("找到 " + adapter.getItemCount() + " 部");
+                return;
+            }
+        }
+        if (adapter.getItemCount() > 0) {
+            tvStatus.setText("找到 " + adapter.getItemCount() + " 部");
+        } else if (left <= 0) {
+            tvStatus.setText("未找到相关影片，可换个关键词或切换站点");
+        }
     }
 
     private void doSearch() {
@@ -188,7 +238,13 @@ public class MobileListActivity extends MobileBaseActivity {
         if (TextUtils.isEmpty(wd)) { toast("请输入片名"); return; }
         saveSearchWord(wd);
         adapter.clear();
+        seenKeys.clear();
         tvStatus.setText("正在加载数据源…");
+        try { com.lzy.okgo.OkGo.getInstance().cancelTag("search"); } catch (Throwable ignored) {}
+        if (searchExecutor != null) {
+            try { searchExecutor.shutdownNow(); } catch (Throwable ignored) {}
+        }
+        searchExecutor = Executors.newFixedThreadPool(6);
 
         // 搜索前先确保爬虫已加载（与 TV 一致）
         MobileDataInitializer.ensureReady(false, this, new MobileDataInitializer.Callback() {
@@ -198,10 +254,40 @@ public class MobileListActivity extends MobileBaseActivity {
                     tvStatus.setText("没有可用于搜索的站点");
                     return;
                 }
+                currentToken = wd + "_" + System.currentTimeMillis();
+                seenKeys.clear();
+                pendingSearches.set(sources.size());
                 tvStatus.setText("正在搜索「" + wd + "」…");
-                for (SourceBean bean : sources) {
-                    try { viewModel.getSearch(bean.getKey(), wd); } catch (Throwable t) {}
+                for (final SourceBean bean : sources) {
+                    searchExecutor.execute(new Runnable() {
+                        @Override public void run() {
+                            try {
+                                viewModel.getSearch(bean.getKey(), wd, currentToken);
+                            } catch (final Throwable t) {
+                                runOnUiThread(new Runnable() {
+                                    @Override public void run() {
+                                        int left = pendingSearches.get() > 0
+                                                ? pendingSearches.decrementAndGet() : 0;
+                                        if (left <= 0 && adapter.getItemCount() == 0) {
+                                            tvStatus.setText("搜索失败：" + (t.getMessage() == null
+                                                    ? "数据源异常" : t.getMessage()));
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    });
                 }
+                // 兜底：站点无响应时给出明确提示，避免一直停在「正在搜索」
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override public void run() {
+                        if (isFinishing()) return;
+                        if (adapter.getItemCount() == 0
+                                && !TextUtils.isEmpty(etQuery.getText().toString().trim())) {
+                            tvStatus.setText("未找到相关影片或站点超时，可切换站点后重试");
+                        }
+                    }
+                }, 15000);
             }
             @Override public void onError(String msg) { tvStatus.setText("加载失败：" + msg); }
             @Override public void onNotice(String msg) { tvStatus.setText("提示：" + msg); }
